@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Send } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 
 export default function NewsletterSection() {
@@ -11,7 +11,9 @@ export default function NewsletterSection() {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
   const [subscribedEmail, setSubscribedEmail] = useState("");
+  const [loadingCheck, setLoadingCheck] = useState(false);
 
+  // Check localStorage first for instant initial render
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("kamta_wise_subscribed_email");
@@ -22,11 +24,41 @@ export default function NewsletterSection() {
     }
   }, []);
 
+  // Check Firestore for user's email subscription state across devices
   useEffect(() => {
-    if (user?.email && !subscribed) {
+    if (!user?.email) return;
+
+    const userEmailNormalized = user.email.trim().toLowerCase();
+    
+    // Auto-fill default input if not already subscribed
+    if (!subscribed) {
       setEmail(user.email);
     }
-  }, [user, subscribed]);
+
+    async function checkSubscription() {
+      try {
+        setLoadingCheck(true);
+        const q = query(
+          collection(db, "newsletter_subscribers"),
+          where("email", "==", userEmailNormalized)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          setSubscribed(true);
+          setSubscribedEmail(userEmailNormalized);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("kamta_wise_subscribed_email", userEmailNormalized);
+          }
+        }
+      } catch (err) {
+        console.error("Error checking newsletter subscription status:", err);
+      } finally {
+        setLoadingCheck(false);
+      }
+    }
+
+    checkSubscription();
+  }, [user?.email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,16 +66,27 @@ export default function NewsletterSection() {
       setIsAuthModalOpen(true);
       return;
     }
-    if (email.trim()) {
+    const targetEmail = email.trim().toLowerCase();
+    if (targetEmail) {
       try {
-        await addDoc(collection(db, "newsletter_subscribers"), {
-          email: email.trim(),
-          subscribedAt: new Date()
-        });
+        // Check if email already exists in Firestore to avoid duplicate records
+        const q = query(
+          collection(db, "newsletter_subscribers"),
+          where("email", "==", targetEmail)
+        );
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+          await addDoc(collection(db, "newsletter_subscribers"), {
+            email: targetEmail,
+            subscribedAt: new Date()
+          });
+        }
+
         setSubscribed(true);
-        setSubscribedEmail(email.trim());
+        setSubscribedEmail(targetEmail);
         if (typeof window !== "undefined") {
-          localStorage.setItem("kamta_wise_subscribed_email", email.trim());
+          localStorage.setItem("kamta_wise_subscribed_email", targetEmail);
         }
         setEmail("");
       } catch (error) {
