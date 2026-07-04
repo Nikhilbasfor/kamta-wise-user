@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand Luxury Palette */
+  --color-brand-cream: #FBFBF9;
+  --color-brand-beige: #F4F1EA;
+  --color-brand-taupe: #E7E2D8;
+  --color-brand-charcoal: #1C1B1A;
+  --color-brand-espresso: #4A3C31;
+  --color-brand-accent: #4A3C31; /* Espresso Brown as Accent */
+  
+  /* Fonts */
+  --font-serif: var(--font-cormorant);
+  --font-sans: var(--font-outfit);
+}
+
+:root {
+  --background: #FBFBF9; /* Cream */
+  --foreground: #1C1B1A; /* Charcoal Black */
+}
+
+body {
+  background-color: var(--color-brand-cream);
+  color: var(--color-brand-charcoal);
+  font-family: var(--font-outfit), sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Elegant Headings styling */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-cormorant), serif;
+  letter-spacing: -0.02em;
+}
+
+/* Custom Scrollbar for Luxury Aesthetics */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FBFBF9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E7E2D8;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4A3C31;
+}
+
+/* Fade in animation utility */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+/* Slide in from left animation */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Modal and drawer transitions */
+.drawer-backdrop {
+  transition: opacity 0.3s ease-in-out;
+}
+
+.drawer-content {
+  transition: transform 0.3s ease-in-out;
+}
