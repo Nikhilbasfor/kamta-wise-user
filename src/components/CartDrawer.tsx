@@ -203,13 +203,6 @@ export default function CartDrawer() {
       });
     }
   });
-  if (cart.length > 0) {
-    uniquePromosMap.set("WISE10", {
-      code: "WISE10",
-      discount: Math.round(subtotal * 0.1),
-      productName: "Entire Order"
-    });
-  }
   const availablePromos = Array.from(uniquePromosMap.values());
 
   const formatPrice = (value: number) => {
@@ -226,14 +219,6 @@ export default function CartDrawer() {
     if (!code) return;
 
     setPromoError("");
-
-    if (code === "WISE10") {
-      const discount = Math.round(subtotal * 0.1);
-      setAppliedPromoDiscount(discount);
-      setPromoApplied(true);
-      setPromoMessage(`10% discount applied with code WISE10!`);
-      return;
-    }
 
     // Check if code matches any product in cart
     const matchingItem = cart.find(
@@ -433,7 +418,7 @@ export default function CartDrawer() {
                           }}
                           className="bg-brand-cream border border-brand-taupe/80 hover:border-brand-espresso hover:text-brand-charcoal px-2 py-0.5 rounded text-[9px] uppercase tracking-wider transition-colors duration-200 cursor-pointer font-medium text-neutral-600"
                         >
-                          {p.code} ({p.code === "WISE10" ? "10% Off" : `Save ₹${p.discount}`})
+                          {p.code} (Save ₹{p.discount})
                         </button>
                       ))}
                     </div>

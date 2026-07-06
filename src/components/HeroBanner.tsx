@@ -33,7 +33,7 @@ const defaultSlides: Slide[] = [
 
 export default function HeroBanner() {
   const [activeSlides, setActiveSlides] = useState<Slide[]>(defaultSlides);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {

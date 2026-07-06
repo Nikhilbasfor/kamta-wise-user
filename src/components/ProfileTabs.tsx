@@ -6,7 +6,7 @@ import ContactForm from "./ContactForm";
 import AuthScreen from "./AuthScreen";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 interface ProfileTabsProps {
   initialTab?: string;
@@ -83,6 +83,45 @@ export default function ProfileTabs({ initialTab = "account" }: ProfileTabsProps
   const [faq2Open, setFaq2Open] = useState(false);
   const [faq3Open, setFaq3Open] = useState(false);
   const [faq4Open, setFaq4Open] = useState(false);
+
+  // Influencer Application States
+  const [infHandle, setInfHandle] = useState("");
+  const [infFollowers, setInfFollowers] = useState("");
+  const [infLocation, setInfLocation] = useState("");
+  const [infWhyCollab, setInfWhyCollab] = useState("");
+  const [submittingInf, setSubmittingInf] = useState(false);
+
+  const handleApplyInfluencer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!infHandle.trim() || !infFollowers.trim() || !infWhyCollab.trim()) {
+      alert("Please fill in your social handle, follower count, and why you want to collaborate.");
+      return;
+    }
+    setSubmittingInf(true);
+    try {
+      await addDoc(collection(db, "influencerApplications"), {
+        handle: infHandle.trim(),
+        followers: infFollowers.trim(),
+        location: infLocation.trim() || "Global",
+        whyCollab: infWhyCollab.trim(),
+        userId: user?.uid || null,
+        email: profile?.email || user?.email || "Guest",
+        name: profile?.name || user?.displayName || "Influencer Applicant",
+        status: "pending",
+        createdAt: serverTimestamp(),
+      });
+      alert("Thank you for applying! Your collaboration application has been submitted to our administrative team for review.");
+      setInfHandle("");
+      setInfFollowers("");
+      setInfLocation("");
+      setInfWhyCollab("");
+    } catch (err: any) {
+      console.error("Error submitting influencer application:", err);
+      alert("Failed to submit application: " + err.message);
+    } finally {
+      setSubmittingInf(false);
+    }
+  };
 
   const tabs = [
     { id: "account", label: "My Account", icon: User },
@@ -586,26 +625,61 @@ export default function ProfileTabs({ initialTab = "account" }: ProfileTabsProps
                     </p>
                   </div>
                 </div>
-                <div className="border border-brand-taupe/50 p-5 bg-white space-y-4">
+                <form onSubmit={handleApplyInfluencer} className="border border-brand-taupe/50 p-5 bg-white space-y-4">
                   <h4 className="text-xs uppercase tracking-wider font-semibold text-brand-charcoal">Apply for Collaboration</h4>
                   <div className="space-y-3 font-sans">
                     <div className="space-y-1">
-                      <label className="text-[9px] uppercase tracking-wider text-neutral-400 block">Social Media Handle (e.g. @name)</label>
-                      <input type="text" placeholder="@instagram_handle" className="w-full px-3 py-1.5 bg-brand-cream/40 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans" />
+                      <label className="text-[9px] uppercase tracking-wider text-neutral-400 block">Social Media Handle (e.g. @name) *</label>
+                      <input
+                        type="text"
+                        placeholder="@instagram_handle"
+                        value={infHandle}
+                        onChange={(e) => setInfHandle(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-brand-cream/40 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans"
+                        required
+                      />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] uppercase tracking-wider text-neutral-400 block">Follower Count</label>
-                      <input type="text" placeholder="e.g. 15k" className="w-full px-3 py-1.5 bg-brand-cream/40 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans" />
+                      <label className="text-[9px] uppercase tracking-wider text-neutral-400 block">Follower Count *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 15k"
+                        value={infFollowers}
+                        onChange={(e) => setInfFollowers(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-brand-cream/40 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans"
+                        required
+                      />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] uppercase tracking-wider text-neutral-400 block">Primary Audience Location</label>
-                      <input type="text" placeholder="e.g. India, Europe" className="w-full px-3 py-1.5 bg-brand-cream/40 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans" />
+                      <input
+                        type="text"
+                        placeholder="e.g. India, Europe"
+                        value={infLocation}
+                        onChange={(e) => setInfLocation(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-brand-cream/40 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans"
+                      />
                     </div>
-                    <button type="button" onClick={() => alert("Thank you for applying! Our collaborations team will review your profile and reach out within 3 business days.")} className="w-full py-2 bg-brand-charcoal hover:bg-brand-espresso text-[10px] uppercase tracking-widest text-brand-cream transition-colors font-medium cursor-pointer">
-                      Submit Application
+                    <div className="space-y-1">
+                      <label className="text-[9px] uppercase tracking-wider text-neutral-400 block">Why do you want to collaborate with us? *</label>
+                      <textarea
+                        placeholder="Tell us why our minimal, quiet-luxury philosophy resonates with your content style..."
+                        value={infWhyCollab}
+                        onChange={(e) => setInfWhyCollab(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-1.5 bg-brand-cream/40 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans resize-none"
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={submittingInf}
+                      className="w-full py-2.5 bg-brand-charcoal hover:bg-brand-espresso disabled:opacity-50 text-[10px] uppercase tracking-widest text-brand-cream transition-colors font-medium cursor-pointer"
+                    >
+                      {submittingInf ? "Submitting..." : "Submit Application"}
                     </button>
                   </div>
-                </div>
+                </form>
               </div>
             </div>
           );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { Product } from "@/data/products";
 
 import { useAuth } from "@/context/AuthContext";
@@ -30,9 +30,10 @@ interface StoreContextType {
   closeQuickView: () => void;
   isCartDrawerOpen: boolean;
   setIsCartDrawerOpen: (isOpen: boolean) => void;
-  checkoutMessage: string | null;
   triggerCheckout: () => void;
   clearCheckoutMessage: () => void;
+  checkoutMessage: string | null;
+  setCheckoutMessage: (message: string | null) => void;
   checkoutStep: "cart" | "address" | "success";
   setCheckoutStep: (step: "cart" | "address" | "success") => void;
   promoCode: string;
@@ -43,7 +44,7 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-export function StoreProvider({ children }: { children: React.ReactNode }) {
+export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<Product[]>([]);
@@ -57,15 +58,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
 
+  // Ref to prevent saving initial empty state over existing cloud cart on login
+  const dataLoadedForUidRef = useRef<string | null>(null);
+
   // Initialize mounted state
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Load user-specific cart and wishlist from localStorage/Firestore when user changes
+  // Load user-specific cart and wishlist from Firestore/localStorage when user changes
   useEffect(() => {
     if (!isMounted) return;
     if (!user) {
+      dataLoadedForUidRef.current = null;
       setCart([]);
       setWishlist([]);
       setPrevUserId(null);
@@ -75,64 +80,61 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const currentUid = user.uid;
     const isDifferentUser = prevUserId !== null && prevUserId !== currentUid;
 
-    if (isDifferentUser) {
-      // Reset state for the different user account
-      setCart([]);
-      setWishlist([]);
-    }
-
-    const savedCart = localStorage.getItem(`kamta_wise_cart_${currentUid}`);
-    const savedWishlist = localStorage.getItem(`kamta_wise_wishlist_${currentUid}`);
-
-    if (savedCart) {
-      try {
-        setCart(JSON.parse(savedCart));
-      } catch (e) {
-        console.error("Error parsing user cart from localStorage", e);
+    if (isDifferentUser || dataLoadedForUidRef.current !== currentUid) {
+      dataLoadedForUidRef.current = null; // Mark not ready to save until fetch completes
+      if (isDifferentUser) {
         setCart([]);
-      }
-    } else {
-      getDoc(doc(db, "users", currentUid, "storeData", "cart")).then((cartDoc) => {
-        if (cartDoc.exists()) {
-          const items = cartDoc.data().items || [];
-          setCart(items);
-          localStorage.setItem(`kamta_wise_cart_${currentUid}`, JSON.stringify(items));
-        } else if (isDifferentUser) {
-          setCart([]);
-        }
-      }).catch((err) => {
-        console.error("Error loading cart from firestore:", err);
-      });
-    }
-
-    if (savedWishlist) {
-      try {
-        setWishlist(JSON.parse(savedWishlist));
-      } catch (e) {
-        console.error("Error parsing user wishlist from localStorage", e);
         setWishlist([]);
       }
-    } else {
-      getDoc(doc(db, "users", currentUid, "storeData", "wishlist")).then((wishlistDoc) => {
-        if (wishlistDoc.exists()) {
-          const items = wishlistDoc.data().items || [];
-          setWishlist(items);
-          localStorage.setItem(`kamta_wise_wishlist_${currentUid}`, JSON.stringify(items));
-        } else if (isDifferentUser) {
-          setWishlist([]);
-        }
-      }).catch((err) => {
-        console.error("Error loading wishlist from firestore:", err);
-      });
     }
+
+    const savedCartLocal = localStorage.getItem(`kamta_wise_cart_${currentUid}`);
+    const savedWishlistLocal = localStorage.getItem(`kamta_wise_wishlist_${currentUid}`);
+
+    // Prioritize cloud data from Firestore for cross-browser synchronization
+    Promise.all([
+      getDoc(doc(db, "users", currentUid, "storeData", "cart")).catch(() => null),
+      getDoc(doc(db, "users", currentUid, "storeData", "wishlist")).catch(() => null)
+    ]).then(([cartDoc, wishlistDoc]) => {
+      let finalCart: CartItem[] = [];
+      let finalWishlist: Product[] = [];
+
+      // Process Cart
+      if (cartDoc && cartDoc.exists() && cartDoc.data().items !== undefined) {
+        finalCart = cartDoc.data().items || [];
+      } else if (savedCartLocal) {
+        try {
+          finalCart = JSON.parse(savedCartLocal);
+        } catch (e) {
+          finalCart = [];
+        }
+      }
+
+      // Process Wishlist
+      if (wishlistDoc && wishlistDoc.exists() && wishlistDoc.data().items !== undefined) {
+        finalWishlist = wishlistDoc.data().items || [];
+      } else if (savedWishlistLocal) {
+        try {
+          finalWishlist = JSON.parse(savedWishlistLocal);
+        } catch (e) {
+          finalWishlist = [];
+        }
+      }
+
+      setCart(finalCart);
+      setWishlist(finalWishlist);
+      localStorage.setItem(`kamta_wise_cart_${currentUid}`, JSON.stringify(finalCart));
+      localStorage.setItem(`kamta_wise_wishlist_${currentUid}`, JSON.stringify(finalWishlist));
+      dataLoadedForUidRef.current = currentUid; // Enable cloud syncing
+    });
 
     setPrevUserId(currentUid);
   }, [user, isMounted]);
 
-  // Save cart to localStorage and Firestore when it changes
+  // Save cart to localStorage and Firestore when it changes (only if data is loaded for current user)
   useEffect(() => {
     if (!isMounted) return;
-    if (user) {
+    if (user && dataLoadedForUidRef.current === user.uid) {
       localStorage.setItem(`kamta_wise_cart_${user.uid}`, JSON.stringify(cart));
       setDoc(doc(db, "users", user.uid, "storeData", "cart"), { items: cart }).catch((err) => {
         console.error("Error saving cart to Firestore:", err);
@@ -140,10 +142,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [cart, user, isMounted]);
 
-  // Save wishlist to localStorage and Firestore when it changes
+  // Save wishlist to localStorage and Firestore when it changes (only if data is loaded for current user)
   useEffect(() => {
     if (!isMounted) return;
-    if (user) {
+    if (user && dataLoadedForUidRef.current === user.uid) {
       localStorage.setItem(`kamta_wise_wishlist_${user.uid}`, JSON.stringify(wishlist));
       setDoc(doc(db, "users", user.uid, "storeData", "wishlist"), { items: wishlist }).catch((err) => {
         console.error("Error saving wishlist to Firestore:", err);
@@ -264,6 +266,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         isCartDrawerOpen,
         setIsCartDrawerOpen,
         checkoutMessage,
+        setCheckoutMessage,
         triggerCheckout,
         clearCheckoutMessage,
         checkoutStep,

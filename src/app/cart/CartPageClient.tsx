@@ -55,16 +55,32 @@ export default function CartPageClient() {
     0
   );
 
+  const [appliedPromoDiscount, setAppliedPromoDiscount] = useState(0);
+  const [promoMessage, setPromoMessage] = useState("");
+
   const handleApplyPromo = (e: React.FormEvent) => {
     e.preventDefault();
-    if (promoCode.trim().toUpperCase() === "WISE10") {
+    const code = promoCode.trim().toUpperCase();
+    if (!code) return;
+
+    const matchingItem = cart.find(
+      (item) => item.product.promoCode && item.product.promoCode.trim().toUpperCase() === code
+    );
+
+    if (matchingItem) {
+      const fixedDiscount = matchingItem.product.promoDiscount 
+        ? Number(matchingItem.product.promoDiscount) * matchingItem.quantity
+        : Math.round(((matchingItem.product.discountedPrice ?? matchingItem.product.price) * 0.15) * matchingItem.quantity);
+      
+      setAppliedPromoDiscount(fixedDiscount);
       setPromoApplied(true);
-    } else if (promoCode.trim() !== "") {
-      alert("Invalid code. Try 'WISE10' for demonstration.");
+      setPromoMessage(`Promo code ${code} applied for ${matchingItem.product.name}! Saved ₹${fixedDiscount}.`);
+    } else {
+      alert(`Invalid promo code "${code}". Please use an active promo code configured for your cart items.`);
     }
   };
 
-  const discountedSubtotal = promoApplied ? subtotal * 0.9 : subtotal;
+  const discountedSubtotal = promoApplied ? Math.max(0, subtotal - appliedPromoDiscount) : subtotal;
 
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -223,7 +239,7 @@ export default function CartPageClient() {
               <form onSubmit={handleApplyPromo} className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="PROMO CODE (e.g. WISE10)"
+                  placeholder="ENTER PROMO CODE"
                   value={promoCode}
                   onChange={(e) => setPromoCode(e.target.value)}
                   className="flex-1 bg-white border border-brand-taupe px-3 py-2 text-xs uppercase tracking-wider font-sans focus:outline-none focus:border-brand-espresso placeholder-neutral-405 rounded-md"
@@ -239,12 +255,16 @@ export default function CartPageClient() {
               </form>
 
               {promoApplied && (
-                <p className="text-xs text-emerald-700 font-sans flex justify-between">
-                  <span>Promo code WISE10 applied (10% Off)</span>
+                <p className="text-xs text-emerald-700 font-sans flex justify-between items-center bg-emerald-50 p-2.5 rounded border border-emerald-200">
+                  <span>{promoMessage || `Promo code ${promoCode.toUpperCase()} applied!`}</span>
                   <button
                     type="button"
-                    onClick={() => setPromoApplied(false)}
-                    className="underline text-neutral-550 hover:text-brand-charcoal"
+                    onClick={() => {
+                      setPromoApplied(false);
+                      setAppliedPromoDiscount(0);
+                      setPromoCode("");
+                    }}
+                    className="underline text-neutral-550 hover:text-brand-charcoal ml-2 font-medium"
                   >
                     Remove
                   </button>
@@ -259,8 +279,8 @@ export default function CartPageClient() {
                 </div>
                 {promoApplied && (
                   <div className="flex justify-between font-sans font-light text-emerald-700">
-                    <span>Discount (10%)</span>
-                    <span>-{formatPrice(subtotal - discountedSubtotal)}</span>
+                    <span>Promo Discount</span>
+                    <span>-{formatPrice(appliedPromoDiscount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-sans font-light text-neutral-655">
