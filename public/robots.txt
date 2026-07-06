@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://kamtawise.in
+
+# Sitemaps
+Sitemap: https://kamtawise.in/sitemap.xml
