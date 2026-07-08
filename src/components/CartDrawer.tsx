@@ -31,6 +31,22 @@ export default function CartDrawer() {
     setIsCartDrawerOpen(false);
   }, [pathname, setIsCartDrawerOpen]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const cashfreeOrderId = params.get("cashfree_order_id");
+      
+      if (cashfreeOrderId) {
+        // Clear the query parameter from URL so it doesn't run again on reload
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+
+        // Verify the payment status
+        verifyPayment(cashfreeOrderId);
+      }
+    }
+  }, []);
+
   // Checkout flow states
   const [addressOption, setAddressOption] = useState<"saved" | "new">("saved");
   const [customAddress, setCustomAddress] = useState("");
@@ -66,18 +82,73 @@ export default function CartDrawer() {
     }
   };
 
-  const loadRazorpayScript = () => {
+  const loadCashfreeScript = () => {
     return new Promise((resolve) => {
-      if ((window as any).Razorpay) {
+      if ((window as any).Cashfree) {
         resolve(true);
         return;
       }
       const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
+  };
+
+  const verifyPayment = async (orderId: string) => {
+    setIsCartDrawerOpen(true);
+    setCheckoutStep("address");
+    setPlacingOrder(true);
+    
+    try {
+      const response = await fetch(`/api/cashfree/verify-order?orderId=${orderId}`);
+      const data = await response.json();
+      
+      if (data.paymentStatus === "SUCCESS") {
+        const storedOrder = sessionStorage.getItem("pending_order_details");
+        if (storedOrder) {
+          const newOrder = JSON.parse(storedOrder);
+          
+          if (newOrder.cashfreeOrderId === orderId) {
+            await addOrder(newOrder);
+
+            // Send automated confirmation email using Resend
+            fetch("/api/send-order-email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderNumber: newOrder.orderNumber,
+                customerEmail: user?.email,
+                customerName: profile?.name || user?.displayName,
+                items: newOrder.items,
+                total: newOrder.total,
+                address: newOrder.address,
+                phone: newOrder.phone,
+              }),
+            }).catch((err) => console.error("Email send failed:", err));
+
+            setPlacedOrderInfo(newOrder);
+            clearCart();
+            setPromoCode("");
+            setPromoApplied(false);
+            setCheckoutStep("success");
+          } else {
+            alert("Payment verified, but local checkout session expired. Please contact support.");
+          }
+        } else {
+          alert("Payment successful! Please contact support with Order ID: " + orderId + " to confirm shipment.");
+        }
+      } else {
+        alert("Payment was not successful (Status: " + (data.orderStatus || "FAILED") + "). Please try again.");
+      }
+    } catch (err) {
+      console.error("Verification failed:", err);
+      alert("Failed to verify payment status. Please contact support.");
+    } finally {
+      setPlacingOrder(false);
+      sessionStorage.removeItem("pending_order_details");
+    }
   };
 
   const handlePlaceOrder = async () => {
@@ -95,86 +166,65 @@ export default function CartDrawer() {
 
     setPlacingOrder(true);
     try {
-      const isLoaded = await loadRazorpayScript();
+      const isLoaded = await loadCashfreeScript();
       if (!isLoaded) {
-        alert("Failed to load Razorpay payment gateway SDK. Please check your internet connection.");
+        alert("Failed to load Cashfree payment gateway SDK. Please check your internet connection.");
         setPlacingOrder(false);
         return;
       }
 
       const orderSubtotal = cart.reduce((acc, item) => acc + (item.product.discountedPrice ?? item.product.price) * item.quantity, 0);
       const orderDiscountedSubtotal = promoApplied ? orderSubtotal * 0.9 : orderSubtotal;
-      const generatedOrderNumber = `#KW-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const generatedOrderNumber = `KW-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_T9KgvDLdewgWZo",
-        amount: Math.round(orderDiscountedSubtotal * 100),
-        currency: "INR",
-        name: "KAMTA WISE",
-        description: `Payment for Order ${generatedOrderNumber}`,
-        prefill: {
-          name: profile?.name || user?.displayName || "",
-          email: user?.email || "",
-          contact: finalPhone,
-        },
-        theme: {
-          color: "#1c1917",
-        },
-        handler: async function (response: any) {
-          try {
-            const newOrder = {
-              orderNumber: generatedOrderNumber,
-              date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-              status: "Processing",
-              paymentStatus: "Paid via Razorpay",
-              razorpayPaymentId: response.razorpay_payment_id || "pay_mock_123",
-              total: orderDiscountedSubtotal,
-              address: finalAddress,
-              phone: finalPhone,
-              items: cart,
-            };
-
-            await addOrder(newOrder);
-
-            // Send automated confirmation email using Resend
-            fetch("/api/send-order-email", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                orderNumber: newOrder.orderNumber,
-                customerEmail: user?.email,
-                customerName: profile?.name || user?.displayName,
-                items: cart,
-                total: orderDiscountedSubtotal,
-                address: finalAddress,
-                phone: finalPhone,
-              }),
-            }).catch((err) => console.error("Email send failed:", err));
-
-            setPlacedOrderInfo(newOrder);
-            clearCart();
-            setPromoCode("");
-            setPromoApplied(false);
-            setCheckoutStep("success");
-          } catch (err: any) {
-            console.error("Failed to complete order after payment:", err);
-            alert("Payment recorded, but saving order failed. Please contact support.");
-          } finally {
-            setPlacingOrder(false);
-          }
-        },
-        modal: {
-          ondismiss: function () {
-            setPlacingOrder(false);
-          },
-        },
+      // Store checkout state in sessionStorage
+      const pendingOrder = {
+        orderNumber: "#" + generatedOrderNumber,
+        date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+        status: "Processing",
+        paymentStatus: "Paid via Cashfree",
+        cashfreeOrderId: generatedOrderNumber,
+        total: orderDiscountedSubtotal,
+        address: finalAddress,
+        phone: finalPhone,
+        items: cart,
       };
+      sessionStorage.setItem("pending_order_details", JSON.stringify(pendingOrder));
 
-      const razorpayInstance = new (window as any).Razorpay(options);
-      razorpayInstance.open();
+      // Request Cashfree order session from our Next.js API route
+      const res = await fetch("/api/cashfree/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: generatedOrderNumber,
+          orderAmount: orderDiscountedSubtotal,
+          customerDetails: {
+            customerId: user?.uid || "guest",
+            customerName: profile?.name || user?.displayName || "Customer",
+            customerEmail: user?.email || "guest@kamtawise.in",
+            customerPhone: finalPhone,
+          },
+          returnUrl: `${window.location.origin}/?cashfree_order_id=${generatedOrderNumber}`,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || "Failed to create payment session.");
+      }
+
+      const cashfree = new (window as any).Cashfree({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "production" ? "production" : "sandbox",
+      });
+
+      await cashfree.checkout({
+        paymentSessionId: resData.payment_session_id,
+        redirectTarget: "_self",
+      });
+
     } catch (err: any) {
-      console.error("Razorpay order initialization failed:", err);
-      alert(err.message || "Failed to initiate Razorpay payment. Please try again.");
+      console.error("Cashfree order initialization failed:", err);
+      alert(err.message || "Failed to initiate Cashfree payment. Please try again.");
       setPlacingOrder(false);
     }
   };
