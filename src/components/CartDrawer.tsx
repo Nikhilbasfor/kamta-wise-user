@@ -51,6 +51,11 @@ export default function CartDrawer() {
   // Checkout flow states
   const [addressOption, setAddressOption] = useState<"saved" | "new">("saved");
   const [customAddress, setCustomAddress] = useState("");
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressLandmark, setAddressLandmark] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [addressPincode, setAddressPincode] = useState("");
   const [customPhone, setCustomPhone] = useState("");
   const [placedOrderInfo, setPlacedOrderInfo] = useState<any>(null);
   const [placingOrder, setPlacingOrder] = useState(false);
@@ -139,7 +144,28 @@ export default function CartDrawer() {
   };
 
   const handlePlaceOrder = async () => {
-    const finalAddress = addressOption === "saved" ? (profile?.address || "") : customAddress;
+    let finalAddress = "";
+    if (addressOption === "saved") {
+      finalAddress = profile?.address || "";
+    } else {
+      if (!addressStreet.trim()) {
+        alert("Please enter Flat/House No, Building & Street name.");
+        return;
+      }
+      if (!addressCity.trim()) {
+        alert("Please enter City or District.");
+        return;
+      }
+      if (!addressState.trim()) {
+        alert("Please select your State.");
+        return;
+      }
+      if (!addressPincode.trim() || addressPincode.trim().length !== 6 || isNaN(Number(addressPincode))) {
+        alert("Please enter a valid 6-digit Pincode.");
+        return;
+      }
+      finalAddress = `${addressStreet.trim()}${addressLandmark.trim() ? `, ${addressLandmark.trim()}` : ""}, ${addressCity.trim()}, ${addressState.trim()} - ${addressPincode.trim()}`;
+    }
     const finalPhone = customPhone;
 
     if (!finalAddress.trim()) {
@@ -578,12 +604,84 @@ export default function CartDrawer() {
                   <div className="space-y-2 flex-1 font-sans">
                     <span className="text-xs font-bold text-brand-charcoal">Deliver to a different address</span>
                     {addressOption === "new" && (
-                      <textarea
-                        placeholder="Flat No, Building Name, Street Name, Area, City, Pincode"
-                        value={customAddress}
-                        onChange={(e) => setCustomAddress(e.target.value)}
-                        className="w-full p-2.5 bg-brand-cream/35 border border-brand-taupe/50 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs h-20 resize-none font-sans"
-                      />
+                      <div className="space-y-2.5 mt-2 pt-2 border-t border-brand-taupe/20">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block mb-1">
+                            Flat No, Building, Street *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Flat 101, Sunshine Apartments, Main Road"
+                            value={addressStreet}
+                            onChange={(e) => setAddressStreet(e.target.value)}
+                            className="w-full p-2 bg-brand-cream/35 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans text-brand-charcoal"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block mb-1">
+                            Area, Landmark (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Near Central Park"
+                            value={addressLandmark}
+                            onChange={(e) => setAddressLandmark(e.target.value)}
+                            className="w-full p-2 bg-brand-cream/35 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans text-brand-charcoal"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block mb-1">
+                              City / District *
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Mumbai"
+                              value={addressCity}
+                              onChange={(e) => setAddressCity(e.target.value)}
+                              className="w-full p-2 bg-brand-cream/35 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans text-brand-charcoal"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block mb-1">
+                              Pincode *
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={6}
+                              placeholder="e.g. 400001"
+                              value={addressPincode}
+                              onChange={(e) => setAddressPincode(e.target.value)}
+                              className="w-full p-2 bg-brand-cream/35 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans text-brand-charcoal"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block mb-1">
+                            State *
+                          </label>
+                          <select
+                            value={addressState}
+                            onChange={(e) => setAddressState(e.target.value)}
+                            className="w-full p-2 bg-brand-cream/35 border border-brand-taupe/40 focus:border-brand-charcoal focus:outline-none rounded-lg text-xs font-sans text-brand-charcoal appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:12px_12px] bg-[right_8px_center] bg-no-repeat pr-8"
+                          >
+                            <option value="">Select State</option>
+                            {[
+                              "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", 
+                              "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", 
+                              "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", 
+                              "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", 
+                              "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", 
+                              "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+                            ].map((stateName) => (
+                              <option key={stateName} value={stateName}>{stateName}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </label>
