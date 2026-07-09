@@ -17,6 +17,8 @@ export interface Product {
   promoDiscount?: number;
   isNewArrival: boolean;
   isBestseller: boolean;
+  isCodAllowed?: boolean;
+  isReturnable?: boolean;
 }
 
 export const products: Product[] = [

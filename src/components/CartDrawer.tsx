@@ -57,6 +57,15 @@ export default function CartDrawer() {
   const [addressState, setAddressState] = useState("");
   const [addressPincode, setAddressPincode] = useState("");
   const [customPhone, setCustomPhone] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"online" | "cod">("online");
+
+  const isCodAllowedForCart = cart.every(item => item.product.isCodAllowed !== false);
+
+  useEffect(() => {
+    if (!isCodAllowedForCart) {
+      setPaymentMethod("online");
+    }
+  }, [isCodAllowedForCart]);
   const [placedOrderInfo, setPlacedOrderInfo] = useState<any>(null);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [appliedPromoDiscount, setAppliedPromoDiscount] = useState<number>(0);
@@ -182,6 +191,46 @@ export default function CartDrawer() {
       const orderSubtotal = cart.reduce((acc, item) => acc + (item.product.discountedPrice ?? item.product.price) * item.quantity, 0);
       const orderDiscountedSubtotal = promoApplied ? orderSubtotal * 0.9 : orderSubtotal;
       const generatedOrderNumber = `KW-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      if (paymentMethod === "cod") {
+        const newOrder = {
+          orderNumber: "#" + generatedOrderNumber,
+          date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+          status: "Processing",
+          paymentStatus: "Cash on Delivery",
+          cashfreeOrderId: "",
+          total: orderDiscountedSubtotal,
+          address: finalAddress,
+          phone: finalPhone,
+          items: cart,
+        };
+
+        await addOrder(newOrder);
+
+        // Send automated confirmation email using Resend
+        fetch("/api/send-order-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderNumber: newOrder.orderNumber,
+            customerEmail: user?.email,
+            customerName: profile?.name || user?.displayName,
+            items: newOrder.items,
+            total: newOrder.total,
+            address: newOrder.address,
+            phone: newOrder.phone,
+            paymentMethod: "Cash on Delivery",
+          }),
+        }).catch((err) => console.error("Email send failed:", err));
+
+        setPlacedOrderInfo(newOrder);
+        clearCart();
+        setPromoCode("");
+        setPromoApplied(false);
+        setCheckoutStep("success");
+        setPlacingOrder(false);
+        return;
+      }
 
       // Store checkout state in sessionStorage
       const pendingOrder = {
@@ -686,6 +735,65 @@ export default function CartDrawer() {
                   </div>
                 </label>
               </div>
+
+              {/* Payment Method Selection */}
+              <div className="space-y-4 pt-4 border-t border-brand-taupe/20">
+                <label className="text-[10px] uppercase tracking-wider text-neutral-400 font-sans block">
+                  Select Payment Method
+                </label>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Option 1: Online Payment */}
+                  <label className={`flex flex-col items-center justify-center p-3 border rounded-lg cursor-pointer hover:bg-brand-cream/10 transition-all ${
+                    paymentMethod === "online" 
+                      ? "border-brand-charcoal bg-brand-cream/20 font-bold" 
+                      : "border-brand-taupe/40 bg-white"
+                  }`}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={paymentMethod === "online"}
+                      onChange={() => setPaymentMethod("online")}
+                      className="sr-only"
+                    />
+                    <span className="text-xs text-brand-charcoal font-sans">Online Payment</span>
+                    <span className="text-[9px] text-neutral-500 font-sans mt-0.5">UPI, Cards, Netbanking</span>
+                  </label>
+
+                  {/* Option 2: Cash on Delivery */}
+                  <label className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
+                    !isCodAllowedForCart
+                      ? "opacity-50 cursor-not-allowed border-neutral-200 bg-neutral-50"
+                      : paymentMethod === "cod"
+                        ? "border-brand-charcoal bg-brand-cream/20 font-bold cursor-pointer"
+                        : "border-brand-taupe/40 bg-white cursor-pointer hover:bg-brand-cream/10"
+                  }`}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={paymentMethod === "cod"}
+                      disabled={!isCodAllowedForCart}
+                      onChange={() => {
+                        if (isCodAllowedForCart) {
+                          setPaymentMethod("cod");
+                        }
+                      }}
+                      className="sr-only"
+                    />
+                    <span className="text-xs text-brand-charcoal font-sans">Cash on Delivery</span>
+                    <span className={`text-[9px] font-sans mt-0.5 ${!isCodAllowedForCart ? "text-red-500 font-medium" : "text-neutral-500"}`}>
+                      {isCodAllowedForCart ? "Pay on delivery" : "Unavailable (Prepaid Items)"}
+                    </span>
+                  </label>
+                </div>
+                
+                {!isCodAllowedForCart && (
+                  <p className="text-[10px] text-red-500 italic font-sans">
+                    * COD is disabled because one or more items in your cart require online prepayment.
+                  </p>
+                )}
+              </div>
+
             </div>
 
             {/* Footer for address confirmation */}
@@ -729,7 +837,12 @@ export default function CartDrawer() {
             <div className="p-4 bg-brand-cream/30 border border-brand-taupe/30 rounded-lg text-left text-xs text-neutral-600 w-full space-y-1">
               <p><span className="font-semibold text-brand-charcoal">Deliver To:</span> {placedOrderInfo?.address}</p>
               <p><span className="font-semibold text-brand-charcoal">Phone:</span> +91 {placedOrderInfo?.phone}</p>
-              <p><span className="font-semibold text-brand-charcoal">Total Paid:</span> {formatPrice(placedOrderInfo?.total || 0)}</p>
+              <p>
+                <span className="font-semibold text-brand-charcoal">
+                  {placedOrderInfo?.paymentStatus === "Cash on Delivery" ? "To Pay on Delivery:" : "Total Paid:"}
+                </span>{" "}
+                {formatPrice(placedOrderInfo?.total || 0)}
+              </p>
             </div>
             <div className="pt-4 w-full space-y-2">
               <button

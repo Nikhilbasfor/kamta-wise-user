@@ -291,12 +291,16 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                 <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block">Free Delivery</span>
               </div>
               <div className="p-3 border border-brand-taupe/20 bg-white/40 rounded-xl space-y-1">
-                <RefreshCw size={16} className="mx-auto text-neutral-500" />
-                <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block">10-Day Returns</span>
+                <RefreshCw size={16} className={`mx-auto ${product.isReturnable === false ? "text-red-500" : "text-neutral-500"}`} />
+                <span className={`text-[9px] uppercase tracking-wider font-sans block ${product.isReturnable === false ? "text-red-500 font-medium" : "text-neutral-400"}`}>
+                  {product.isReturnable === false ? "Non-Returnable" : "10-Day Returns"}
+                </span>
               </div>
               <div className="p-3 border border-brand-taupe/20 bg-white/40 rounded-xl space-y-1">
-                <Shield size={16} className="mx-auto text-neutral-500" />
-                <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-sans block">Secure Payments</span>
+                <Shield size={16} className={`mx-auto ${product.isCodAllowed === false ? "text-amber-600" : "text-neutral-500"}`} />
+                <span className={`text-[9px] uppercase tracking-wider font-sans block ${product.isCodAllowed === false ? "text-amber-700 font-medium" : "text-neutral-400"}`}>
+                  {product.isCodAllowed === false ? "Prepaid Only" : "COD Available"}
+                </span>
               </div>
             </div>
 
