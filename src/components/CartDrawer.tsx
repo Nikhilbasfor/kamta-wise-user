@@ -7,6 +7,7 @@ import Image from "next/image";
 import EmptyState from "./EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
+import { load } from "@cashfreepayments/cashfree-js";
 
 export default function CartDrawer() {
   const pathname = usePathname();
@@ -82,20 +83,6 @@ export default function CartDrawer() {
     }
   };
 
-  const loadCashfreeScript = () => {
-    return new Promise((resolve) => {
-      if ((window as any).Cashfree) {
-        resolve(true);
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
-
   const verifyPayment = async (orderId: string) => {
     setIsCartDrawerOpen(true);
     setCheckoutStep("address");
@@ -166,13 +153,6 @@ export default function CartDrawer() {
 
     setPlacingOrder(true);
     try {
-      const isLoaded = await loadCashfreeScript();
-      if (!isLoaded) {
-        alert("Failed to load Cashfree payment gateway SDK. Please check your internet connection.");
-        setPlacingOrder(false);
-        return;
-      }
-
       const orderSubtotal = cart.reduce((acc, item) => acc + (item.product.discountedPrice ?? item.product.price) * item.quantity, 0);
       const orderDiscountedSubtotal = promoApplied ? orderSubtotal * 0.9 : orderSubtotal;
       const generatedOrderNumber = `KW-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -213,7 +193,7 @@ export default function CartDrawer() {
         throw new Error(resData.error || "Failed to create payment session.");
       }
 
-      const cashfree = new (window as any).Cashfree({
+      const cashfree = await load({
         mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "production" ? "production" : "sandbox",
       });
 
