@@ -94,7 +94,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         </button>
 
         {/* Quick actions overlay (Desktop only) */}
-        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-4">
+        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-300 flex items-end justify-center p-4">
           <div className="flex gap-2 w-full max-w-[90%] transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
             <button
               onClick={handleQuickAdd}
