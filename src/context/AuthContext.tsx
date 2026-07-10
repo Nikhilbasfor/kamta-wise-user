@@ -46,17 +46,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const isSigningUpRef = React.useRef(false);
 
   useEffect(() => {
     try {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
         try {
-          setUser(currentUser);
           if (currentUser) {
+            if (isSigningUpRef.current) {
+              setUser(currentUser);
+              return;
+            }
             // Load custom user profile from localStorage namespace
             const savedProfile = localStorage.getItem(`kamta_wise_profile_${currentUser.uid}`);
             if (savedProfile) {
               try {
+                setUser(currentUser);
                 setProfile(JSON.parse(savedProfile));
               } catch (e) {
                 console.error("Error loading saved user profile", e);
@@ -68,23 +73,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (docSnap.exists()) {
                 const data = docSnap.data() as UserProfile;
                 localStorage.setItem(`kamta_wise_profile_${currentUser.uid}`, JSON.stringify(data));
+                setUser(currentUser);
                 setProfile(data);
               } else {
-                // Create fresh profile
-                const defaultProfile: UserProfile = {
-                  name: currentUser.displayName || "",
-                  email: currentUser.email || "",
-                  phone: "",
-                  address: "",
-                  orders: [],
-                  createdAt: new Date().toISOString(),
-                };
-                await setDoc(docRef, defaultProfile);
-                localStorage.setItem(`kamta_wise_profile_${currentUser.uid}`, JSON.stringify(defaultProfile));
-                setProfile(defaultProfile);
+                // First-time user detected with no profile. Reject session.
+                setUser(null);
+                setProfile(null);
+                await auth.signOut();
+                alert("Account profile not found. Please sign up first using Email & Password to create your account.");
               }
             }
           } else {
+            setUser(null);
             setProfile(null);
           }
         } catch (e) {
@@ -126,27 +126,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (name: string, email: string, password: string, phone = "", address = "") => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    if (userCredential.user) {
-      await updateProfile(userCredential.user, {
-        displayName: name,
-      });
-      // Force reload to apply displayName updates immediately
-      await userCredential.user.reload();
-      const freshUser = auth.currentUser;
-      setUser(freshUser);
+    isSigningUpRef.current = true;
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: name,
+        });
+        // Force reload to apply displayName updates immediately
+        await userCredential.user.reload();
+        const freshUser = auth.currentUser;
 
-      const newProfile: UserProfile = {
-        name,
-        email,
-        phone,
-        address,
-        orders: [],
-        createdAt: new Date().toISOString(),
-      };
-      localStorage.setItem(`kamta_wise_profile_${userCredential.user.uid}`, JSON.stringify(newProfile));
-      setProfile(newProfile);
-      await setDoc(doc(db, "users", userCredential.user.uid), newProfile);
+        const newProfile: UserProfile = {
+          name,
+          email,
+          phone,
+          address,
+          orders: [],
+          createdAt: new Date().toISOString(),
+        };
+        localStorage.setItem(`kamta_wise_profile_${userCredential.user.uid}`, JSON.stringify(newProfile));
+        await setDoc(doc(db, "users", userCredential.user.uid), newProfile);
+        
+        setUser(freshUser);
+        setProfile(newProfile);
+      }
+    } finally {
+      isSigningUpRef.current = false;
     }
     setIsAuthModalOpen(false);
   };
@@ -160,20 +166,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const docRef = doc(db, "users", googleUser.uid);
         const docSnap = await getDoc(docRef);
         if (!docSnap.exists()) {
-          const defaultProfile: UserProfile = {
-            name: googleUser.displayName || "",
-            email: googleUser.email || "",
-            phone: "",
-            address: "",
-            orders: [],
-            createdAt: new Date().toISOString(),
-          };
-          await setDoc(docRef, defaultProfile);
-          localStorage.setItem(`kamta_wise_profile_${googleUser.uid}`, JSON.stringify(defaultProfile));
-          setProfile(defaultProfile);
+          // New user using Google. Sign out and clean up auth credentials.
+          await auth.signOut();
+          try {
+            await googleUser.delete();
+          } catch (delErr) {
+            console.error("Error cleaning up user:", delErr);
+          }
+          setUser(null);
+          setProfile(null);
+          alert("Google Sign-In is only allowed for users who have already registered using Email & Password. Please Sign Up first.");
+          return;
         } else {
           const data = docSnap.data() as UserProfile;
           localStorage.setItem(`kamta_wise_profile_${googleUser.uid}`, JSON.stringify(data));
+          setUser(googleUser);
           setProfile(data);
         }
       }

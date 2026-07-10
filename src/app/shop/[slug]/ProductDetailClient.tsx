@@ -83,18 +83,17 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
         const q = query(
           collection(db, "products"),
           where("category", "==", product.category),
-          where("isActive", "!=", false),
-          limit(6)
+          limit(10)
         );
         const querySnapshot = await getDocs(q);
         const list: Product[] = [];
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data() as any;
-          if (docSnap.id !== product.id) {
+          if (docSnap.id !== product.id && data.isActive !== false) {
             list.push({ id: docSnap.id, ...data } as Product);
           }
         });
-        setRecommendations(list);
+        setRecommendations(list.slice(0, 4));
       } catch (err) {
         console.error("Error fetching recommended products:", err);
       }
@@ -207,7 +206,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
-            className="relative aspect-[3/4] w-full bg-brand-beige overflow-hidden rounded-2xl border border-brand-taupe/20 shadow-xs group"
+            className="relative aspect-[3/4] w-full bg-brand-beige overflow-hidden rounded-2xl border border-brand-taupe/20 shadow-xs group touch-none"
           >
             {mediaList[activeImageIndex] && (
               mediaList[activeImageIndex].type === "video" ? (
@@ -254,18 +253,18 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                 <button
                   type="button"
                   onClick={() => setActiveImageIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length)}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-brand-charcoal p-2.5 rounded-full shadow-sm hover:scale-105 transition-all z-20 cursor-pointer md:opacity-0 md:group-hover:opacity-100 duration-300"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-brand-charcoal p-2.5 rounded-full shadow-md hover:scale-105 transition-all z-20 cursor-pointer duration-300 flex items-center justify-center"
                   aria-label="Previous media"
                 >
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={18} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveImageIndex((prev) => (prev + 1) % mediaList.length)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-brand-charcoal p-2.5 rounded-full shadow-sm hover:scale-105 transition-all z-20 cursor-pointer md:opacity-0 md:group-hover:opacity-100 duration-300"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-brand-charcoal p-2.5 rounded-full shadow-md hover:scale-105 transition-all z-20 cursor-pointer duration-300 flex items-center justify-center"
                   aria-label="Next media"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={18} />
                 </button>
                 
                 {/* Dots indicator */}
