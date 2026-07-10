@@ -21,6 +21,7 @@ export interface UserProfile {
   phone: string;
   address: string;
   orders: any[];
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   phone: "",
                   address: "",
                   orders: [],
+                  createdAt: new Date().toISOString(),
                 };
                 await setDoc(docRef, defaultProfile);
                 localStorage.setItem(`kamta_wise_profile_${currentUser.uid}`, JSON.stringify(defaultProfile));
@@ -140,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         phone,
         address,
         orders: [],
+        createdAt: new Date().toISOString(),
       };
       localStorage.setItem(`kamta_wise_profile_${userCredential.user.uid}`, JSON.stringify(newProfile));
       setProfile(newProfile);
@@ -163,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             phone: "",
             address: "",
             orders: [],
+            createdAt: new Date().toISOString(),
           };
           await setDoc(docRef, defaultProfile);
           localStorage.setItem(`kamta_wise_profile_${googleUser.uid}`, JSON.stringify(defaultProfile));

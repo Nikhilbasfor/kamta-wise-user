@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronRight, Share2, Shield, Truck, RefreshCw } from "lucide-react";
+import { ChevronRight, Share2, Shield, Truck, RefreshCw, ChevronLeft, Play } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
 import { Product } from "@/data/products";
@@ -11,6 +11,8 @@ import QuantitySelector from "@/components/QuantitySelector";
 import SizeSelector from "@/components/SizeSelector";
 import AddToCartButton from "@/components/AddToCartButton";
 import WishlistButton from "@/components/WishlistButton";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs, limit } from "firebase/firestore";
 
 interface ProductDetailClientProps {
   product: Product;
@@ -26,6 +28,11 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [openSection, setOpenSection] = useState<"details" | "shipping" | "sustainability">("details");
   const [copiedShare, setCopiedShare] = useState(false);
+  const [recommendations, setRecommendations] = useState<Product[]>([]);
+
+  // Swipe gesture state variables
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   // Set defaults
   useEffect(() => {
@@ -36,6 +43,89 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       setActiveImageIndex(0);
     }
   }, [product]);
+
+  // Reset active image index to 0 when the selected color changes
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [selectedColor]);
+
+  // Resolve color specific images list
+  const getColorSpecificImages = () => {
+    if (!product.colorImages || !selectedColor) return product.images;
+    const colorKey = Object.keys(product.colorImages).find(
+      (key) => key.toLowerCase() === selectedColor.toLowerCase()
+    );
+    if (colorKey && product.colorImages[colorKey] && product.colorImages[colorKey].length > 0) {
+      const colorSpecific = product.colorImages[colorKey];
+      const remaining = product.images.filter(img => !colorSpecific.includes(img));
+      return [...colorSpecific, ...remaining];
+    }
+    return product.images;
+  };
+
+  // Build unified list of images and videos
+  const getMediaList = () => {
+    const imgs = getColorSpecificImages();
+    const list: { type: "image" | "video"; src: string }[] = imgs.map(src => ({ type: "image", src }));
+    if (product.videoUrl) {
+      list.push({ type: "video", src: product.videoUrl });
+    }
+    return list;
+  };
+
+  const mediaList = getMediaList();
+
+  // Load category recommendations
+  useEffect(() => {
+    if (!product?.category) return;
+    const fetchRecommendations = async () => {
+      try {
+        const q = query(
+          collection(db, "products"),
+          where("category", "==", product.category),
+          where("isActive", "!=", false),
+          limit(6)
+        );
+        const querySnapshot = await getDocs(q);
+        const list: Product[] = [];
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data() as any;
+          if (docSnap.id !== product.id) {
+            list.push({ id: docSnap.id, ...data } as Product);
+          }
+        });
+        setRecommendations(list);
+      } catch (err) {
+        console.error("Error fetching recommended products:", err);
+      }
+    };
+    fetchRecommendations();
+  }, [product]);
+
+  // Swipe gesture handers
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      setActiveImageIndex((prev) => (prev + 1) % mediaList.length);
+    } else if (isRightSwipe) {
+      setActiveImageIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length);
+    }
+  };
 
   const isWishlisted = isInWishlist(product.id);
 
@@ -110,24 +200,93 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       {/* Main product presentation */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
         
-        {/* Left Column: Image Gallery (Span 7) */}
+        {/* Left Column: Image/Video Gallery (Span 7) */}
         <div className="lg:col-span-7 space-y-4">
-          {/* Active Image Box */}
-          <div className="relative aspect-[3/4] w-full bg-brand-beige overflow-hidden rounded-2xl border border-brand-taupe/20 shadow-xs">
-            {product.images[activeImageIndex] && (
-              <Image
-                src={product.images[activeImageIndex]}
-                alt={`${product.name} preview`}
-                fill
-                className="object-cover transition-all duration-700 hover:scale-105"
-                sizes="(max-width: 1024px) 100vw, 60vw"
-                priority
-              />
+          {/* Active Image/Video Box */}
+          <div 
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            className="relative aspect-[3/4] w-full bg-brand-beige overflow-hidden rounded-2xl border border-brand-taupe/20 shadow-xs group"
+          >
+            {mediaList[activeImageIndex] && (
+              mediaList[activeImageIndex].type === "video" ? (
+                <div className="w-full h-full bg-black">
+                  {mediaList[activeImageIndex].src.includes("youtube.com") || mediaList[activeImageIndex].src.includes("youtu.be") ? (
+                    <iframe
+                      src={mediaList[activeImageIndex].src.includes("watch?v=") 
+                        ? `https://www.youtube.com/embed/${mediaList[activeImageIndex].src.split("watch?v=")[1]?.split("&")[0]}`
+                        : mediaList[activeImageIndex].src.includes("youtu.be/")
+                        ? `https://www.youtube.com/embed/${mediaList[activeImageIndex].src.split("youtu.be/")[1]?.split("?")[0]}`
+                        : mediaList[activeImageIndex].src
+                      }
+                      title="Product Video"
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <video
+                      src={mediaList[activeImageIndex].src}
+                      controls
+                      className="w-full h-full object-contain"
+                      playsInline
+                      autoPlay
+                      muted
+                    />
+                  )}
+                </div>
+              ) : (
+                <Image
+                  src={mediaList[activeImageIndex].src}
+                  alt={`${product.name} preview`}
+                  fill
+                  className="object-cover transition-all duration-700 hover:scale-105"
+                  sizes="(max-width: 1024px) 100vw, 60vw"
+                  priority
+                />
+              )
             )}
             
+            {/* Slide Arrows Overlay */}
+            {mediaList.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveImageIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length)}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-brand-charcoal p-2.5 rounded-full shadow-sm hover:scale-105 transition-all z-20 cursor-pointer md:opacity-0 md:group-hover:opacity-100 duration-300"
+                  aria-label="Previous media"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveImageIndex((prev) => (prev + 1) % mediaList.length)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-brand-charcoal p-2.5 rounded-full shadow-sm hover:scale-105 transition-all z-20 cursor-pointer md:opacity-0 md:group-hover:opacity-100 duration-300"
+                  aria-label="Next media"
+                >
+                  <ChevronRight size={16} />
+                </button>
+                
+                {/* Dots indicator */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
+                  {mediaList.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImageIndex(idx)}
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                        activeImageIndex === idx ? "bg-brand-charcoal w-3.5" : "bg-brand-charcoal/30"
+                      }`}
+                      aria-label={`Go to slide ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
             {/* Sale Tag */}
             {product.discountedPrice && (
-              <span className="absolute top-4 left-4 bg-brand-espresso text-white text-[9px] uppercase tracking-widest px-3 py-1 font-sans font-medium rounded-full shadow-xs">
+              <span className="absolute top-4 left-4 bg-brand-espresso text-white text-[9px] uppercase tracking-widest px-3 py-1 font-sans font-medium rounded-full shadow-xs z-10">
                 Sale
               </span>
             )}
@@ -135,7 +294,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
 
           {/* Thumbnail Gallery Row */}
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {product.images.map((img, idx) => (
+            {mediaList.map((item, idx) => (
               <button
                 key={idx}
                 onClick={() => setActiveImageIndex(idx)}
@@ -145,13 +304,22 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                     : "border-brand-taupe/30 hover:border-brand-charcoal/60"
                 }`}
               >
-                <Image
-                  src={img}
-                  alt={`Thumbnail ${idx + 1}`}
-                  fill
-                  className="object-cover"
-                  sizes="80px"
-                />
+                {item.type === "video" ? (
+                  <div className="relative w-full h-full bg-neutral-900 flex flex-col items-center justify-center text-white">
+                    <span className="text-[8px] uppercase tracking-wider font-semibold z-10">Video</span>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/20 transition-colors">
+                      <Play size={16} className="text-white fill-white" />
+                    </div>
+                  </div>
+                ) : (
+                  <Image
+                    src={item.src}
+                    alt={`Thumbnail ${idx + 1}`}
+                    fill
+                    className="object-cover"
+                    sizes="80px"
+                  />
+                )}
               </button>
             ))}
           </div>
@@ -386,6 +554,68 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
         </div>
 
       </div>
+
+      {/* Category Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="border-t border-brand-taupe/20 pt-12 mt-12 space-y-6">
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase tracking-[0.25em] text-neutral-400 font-sans block">
+              More from this category
+            </span>
+            <h2 className="text-xl md:text-2xl font-light text-brand-charcoal font-serif tracking-wide">
+              Recommended for You
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+            {recommendations.map((recProduct) => (
+              <Link 
+                href={`/shop/${recProduct.slug}`} 
+                key={recProduct.id} 
+                className="group space-y-3 block cursor-pointer"
+              >
+                <div className="relative aspect-[3/4] w-full bg-brand-beige overflow-hidden rounded-xl border border-brand-taupe/10">
+                  {recProduct.images && recProduct.images[0] && (
+                    <Image
+                      src={recProduct.images[0]}
+                      alt={recProduct.name}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      sizes="(max-width: 768px) 50vw, 25vw"
+                    />
+                  )}
+                  {recProduct.discountedPrice && (
+                    <span className="absolute top-2 left-2 bg-brand-espresso text-white text-[8px] uppercase tracking-widest px-2 py-0.5 font-sans font-medium rounded">
+                      Sale
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1 text-center sm:text-left">
+                  <h3 className="text-xs font-serif text-brand-charcoal font-light group-hover:text-brand-espresso transition-colors truncate">
+                    {recProduct.name}
+                  </h3>
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    {recProduct.discountedPrice ? (
+                      <>
+                        <span className="text-xs font-serif font-medium text-brand-espresso">
+                          {formatPrice(recProduct.discountedPrice)}
+                        </span>
+                        <span className="text-[10px] font-sans line-through text-neutral-400">
+                          {formatPrice(recProduct.price)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs font-serif text-brand-charcoal">
+                        {formatPrice(recProduct.price)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   );

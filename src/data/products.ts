@@ -19,6 +19,8 @@ export interface Product {
   isBestseller: boolean;
   isCodAllowed?: boolean;
   isReturnable?: boolean;
+  videoUrl?: string;
+  colorImages?: { [colorName: string]: string[] };
 }
 
 export const products: Product[] = [
