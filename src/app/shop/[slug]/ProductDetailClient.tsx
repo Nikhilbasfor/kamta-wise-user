@@ -31,8 +31,10 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const [recommendations, setRecommendations] = useState<Product[]>([]);
 
   // Swipe gesture state variables
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+  const [touchEndY, setTouchEndY] = useState<number | null>(null);
 
   // Set defaults
   useEffect(() => {
@@ -105,24 +107,32 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const minSwipeDistance = 50;
 
   const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    setTouchEndX(null);
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
   };
 
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
+    if (touchStartX === null || touchEndX === null || touchStartY === null || touchEndY === null) return;
+    const diffX = touchStartX - touchEndX;
+    const diffY = touchStartY - touchEndY;
 
-    if (isLeftSwipe) {
-      setActiveImageIndex((prev) => (prev + 1) % mediaList.length);
-    } else if (isRightSwipe) {
-      setActiveImageIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length);
+    // Only process horizontal swipes and ignore vertical scrolling gestures
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      const isLeftSwipe = diffX > minSwipeDistance;
+      const isRightSwipe = diffX < -minSwipeDistance;
+
+      if (isLeftSwipe) {
+        setActiveImageIndex((prev) => (prev + 1) % mediaList.length);
+      } else if (isRightSwipe) {
+        setActiveImageIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length);
+      }
     }
   };
 
@@ -206,7 +216,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
-            className="relative aspect-[3/4] w-full bg-brand-beige overflow-hidden rounded-2xl border border-brand-taupe/20 shadow-xs group touch-none"
+            className="relative aspect-[3/4] w-full bg-brand-beige overflow-hidden rounded-2xl border border-brand-taupe/20 shadow-xs group touch-pan-y"
           >
             {mediaList[activeImageIndex] && (
               mediaList[activeImageIndex].type === "video" ? (
