@@ -8,6 +8,8 @@ import EmptyState from "./EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import { load } from "@cashfreepayments/cashfree-js";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 
 export default function CartDrawer() {
   const pathname = usePathname();
@@ -103,13 +105,38 @@ export default function CartDrawer() {
     setPlacingOrder(true);
     
     try {
-      const response = await fetch(`/api/cashfree/verify-order?orderId=${orderId}`);
+      let currentUser = auth.currentUser;
+      if (!currentUser) {
+        await new Promise<void>((resolve) => {
+          const unsubscribe = auth.onAuthStateChanged((u) => {
+            currentUser = u;
+            unsubscribe();
+            resolve();
+          });
+        });
+      }
+
+      if (!currentUser) {
+        alert("Authentication required to verify payment. Please log in.");
+        setPlacingOrder(false);
+        return;
+      }
+
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/cashfree/verify-order?orderId=${orderId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
       const data = await response.json();
       
       if (data.paymentStatus === "SUCCESS") {
-        const storedOrder = sessionStorage.getItem("pending_order_details");
-        if (storedOrder) {
-          const newOrder = JSON.parse(storedOrder);
+        const pendingDocRef = doc(db, "users", currentUser.uid, "pendingOrder");
+        const pendingDoc = await getDoc(pendingDocRef);
+        
+        if (pendingDoc.exists()) {
+          const newOrder = pendingDoc.data();
           
           if (newOrder.cashfreeOrderId === orderId) {
             await addOrder(newOrder);
@@ -117,11 +144,14 @@ export default function CartDrawer() {
             // Send automated confirmation email using Resend
             fetch("/api/send-order-email", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
               body: JSON.stringify({
                 orderNumber: newOrder.orderNumber,
-                customerEmail: user?.email,
-                customerName: profile?.name || user?.displayName,
+                customerEmail: currentUser.email,
+                customerName: profile?.name || currentUser.displayName,
                 items: newOrder.items,
                 total: newOrder.total,
                 address: newOrder.address,
@@ -134,11 +164,13 @@ export default function CartDrawer() {
             setPromoCode("");
             setPromoApplied(false);
             setCheckoutStep("success");
+
+            await deleteDoc(pendingDocRef);
           } else {
             alert("Payment verified, but local checkout session expired. Please contact support.");
           }
         } else {
-          alert("Payment successful! Please contact support with Order ID: " + orderId + " to confirm shipment.");
+          alert("Order recovery: Payment was successful, but we could not find your pending order details in our database. Please contact Kamta Wise support with Cashfree Order ID: " + orderId + " to recover your order.");
         }
       } else {
         alert("Payment was not successful (Status: " + (data.orderStatus || "FAILED") + "). Please try again.");
@@ -148,7 +180,6 @@ export default function CartDrawer() {
       alert("Failed to verify payment status. Please contact support.");
     } finally {
       setPlacingOrder(false);
-      sessionStorage.removeItem("pending_order_details");
     }
   };
 
@@ -188,6 +219,7 @@ export default function CartDrawer() {
 
     setPlacingOrder(true);
     try {
+      const token = user ? await user.getIdToken() : "";
       const orderSubtotal = cart.reduce((acc, item) => acc + (item.product.discountedPrice ?? item.product.price) * item.quantity, 0);
       const orderDiscountedSubtotal = promoApplied ? orderSubtotal * 0.9 : orderSubtotal;
       const generatedOrderNumber = `KW-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -210,7 +242,10 @@ export default function CartDrawer() {
         // Send automated confirmation email using Resend
         fetch("/api/send-order-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
           body: JSON.stringify({
             orderNumber: newOrder.orderNumber,
             customerEmail: user?.email,
@@ -232,7 +267,7 @@ export default function CartDrawer() {
         return;
       }
 
-      // Store checkout state in sessionStorage
+      // Store checkout state in Firestore
       const pendingOrder = {
         orderNumber: "#" + generatedOrderNumber,
         date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
@@ -244,12 +279,17 @@ export default function CartDrawer() {
         phone: finalPhone,
         items: cart,
       };
-      sessionStorage.setItem("pending_order_details", JSON.stringify(pendingOrder));
+      if (user) {
+        await setDoc(doc(db, "users", user.uid, "pendingOrder"), pendingOrder, { merge: true });
+      }
 
       // Request Cashfree order session from our Next.js API route
       const res = await fetch("/api/cashfree/create-order", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           orderId: generatedOrderNumber,
           orderAmount: orderDiscountedSubtotal,

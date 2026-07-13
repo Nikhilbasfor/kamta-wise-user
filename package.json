@@ -12,6 +12,7 @@
   "dependencies": {
     "@cashfreepayments/cashfree-js": "^1.0.7",
     "firebase": "^12.15.0",
+    "firebase-admin": "^14.1.0",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "next-sitemap": "^4.2.3",

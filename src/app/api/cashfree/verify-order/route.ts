@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { adminAuth } from "@/lib/firebaseAdmin";
 
 export async function GET(request: Request) {
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try { await adminAuth.verifyIdToken(authHeader.slice(7)); }
+  catch { return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); }
+
   try {
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get("orderId");

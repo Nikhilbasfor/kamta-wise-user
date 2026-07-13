@@ -243,8 +243,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Write updated profile with orders array to Firestore
     await setDoc(doc(db, "users", user.uid), updated, { merge: true });
 
-    // Write individual order to orders subcollection
-    await addDoc(collection(db, "users", user.uid, "orders"), order);
+    // Write individual order to orders subcollection and top-level orders collection
+    const orderId = order.orderNumber ? order.orderNumber.replace("#", "") : `order-${Date.now()}`;
+    const orderWithCreatedAt = {
+      ...order,
+      createdAt: order.createdAt || new Date().toISOString(),
+      userName: profile?.name || user.displayName || "Guest Customer",
+      userEmail: profile?.email || user.email || ""
+    };
+    await setDoc(doc(db, "users", user.uid, "orders", orderId), orderWithCreatedAt);
+    await setDoc(doc(db, "orders", orderId), { ...orderWithCreatedAt, userId: user.uid });
   };
 
   return (
