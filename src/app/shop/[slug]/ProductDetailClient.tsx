@@ -14,6 +14,30 @@ import WishlistButton from "@/components/WishlistButton";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, limit } from "firebase/firestore";
 
+// Seeded random generator for stable, distinct recommendations per product
+const seededRandom = (seed: string) => {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i) | 0;
+  }
+  return function() {
+    let t = h += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const shuffleWithSeed = (array: any[], seed: string) => {
+  const rand = seededRandom(seed);
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 interface ProductDetailClientProps {
   product: Product;
 }
@@ -85,7 +109,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
         const q = query(
           collection(db, "products"),
           where("category", "==", product.category),
-          limit(10)
+          limit(50)
         );
         const querySnapshot = await getDocs(q);
         const list: Product[] = [];
@@ -95,7 +119,10 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
             list.push({ id: docSnap.id, ...data } as Product);
           }
         });
-        setRecommendations(list.slice(0, 4));
+        
+        // Stably shuffle recommendations using the current product ID as a seed
+        const shuffled = shuffleWithSeed(list, product.id);
+        setRecommendations(shuffled.slice(0, 4));
       } catch (err) {
         console.error("Error fetching recommended products:", err);
       }

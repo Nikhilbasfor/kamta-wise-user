@@ -5,6 +5,7 @@ import { Heart, Eye, ShoppingCart } from "lucide-react";
 import { Product } from "@/data/products";
 import { useStore } from "@/context/StoreContext";
 import Image from "next/image";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
@@ -29,6 +30,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     if (!user) {
       setIsAuthModalOpen(true);
       return;
@@ -39,9 +41,16 @@ export default function ProductCard({ product }: ProductCardProps) {
     addToCart(product, defaultSize, defaultColor, 1);
   };
 
+  const handleProductClick = () => {
+    if (typeof window !== "undefined" && window.location.pathname === "/shop") {
+      sessionStorage.setItem("shop_scroll_position", window.scrollY.toString());
+    }
+  };
+
   return (
-    <div
-      onClick={() => router.push(`/shop/${product.slug}`)}
+    <Link
+      href={`/shop/${product.slug}`}
+      onClick={handleProductClick}
       className="group relative flex flex-col bg-brand-cream border border-brand-taupe/20 overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xs hover:border-brand-taupe/60 animate-fade-in"
     >
       {/* Product Image and Overlay Icons */}
@@ -171,6 +180,6 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

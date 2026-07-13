@@ -130,6 +130,23 @@ export default function ShopClient() {
     setFilteredProducts(result);
   }, [allProducts, searchQuery, activeCategory, activeSize, activeColor, maxPrice, sortBy]);
 
+  // Restore scroll position when user navigates back
+  useEffect(() => {
+    if (!loading && filteredProducts.length > 0) {
+      const savedScroll = sessionStorage.getItem("shop_scroll_position");
+      if (savedScroll) {
+        const timer = setTimeout(() => {
+          window.scrollTo({
+            top: parseInt(savedScroll, 10),
+            behavior: "instant" as any
+          });
+          sessionStorage.removeItem("shop_scroll_position");
+        }, 80);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, filteredProducts]);
+
   const handleClearFilters = () => {
     setSearchQuery("");
     setActiveCategory("All");
