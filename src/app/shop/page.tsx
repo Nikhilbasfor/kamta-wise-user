@@ -18,9 +18,7 @@ export default function ShopPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex-1 flex items-center justify-center min-h-[50vh] bg-brand-cream text-brand-charcoal font-sans text-xs uppercase tracking-[0.2em]">
-          Loading Collection...
-        </div>
+        <div className="min-h-screen bg-brand-cream" />
       }
     >
       <ShopClient />

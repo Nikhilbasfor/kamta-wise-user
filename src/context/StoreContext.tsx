@@ -5,7 +5,7 @@ import { Product } from "@/data/products";
 
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, collection, query, orderBy, onSnapshot } from "firebase/firestore";
 
 export interface CartItem {
   product: Product;
@@ -40,6 +40,9 @@ interface StoreContextType {
   setPromoCode: (code: string) => void;
   promoApplied: boolean;
   setPromoApplied: (applied: boolean) => void;
+  products: Product[];
+  categories: string[];
+  productsLoading: boolean;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -57,6 +60,51 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [prevUserId, setPrevUserId] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
+
+  // Cached collections
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+
+  // Subscribe to collections globally
+  useEffect(() => {
+    // 1. Subscribe to products
+    const qProd = query(collection(db, "products"), orderBy("createdAt", "desc"));
+    const unsubscribeProd = onSnapshot(qProd, (snapshot) => {
+      const fetched: Product[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.isActive !== false) {
+          fetched.push({ id: docSnap.id, ...data } as Product);
+        }
+      });
+      setProducts(fetched);
+      setProductsLoading(false);
+    }, (err) => {
+      console.error("Error loading products globally:", err);
+      setProductsLoading(false);
+    });
+
+    // 2. Subscribe to categories
+    const qCat = query(collection(db, "categories"), orderBy("name", "asc"));
+    const unsubscribeCat = onSnapshot(qCat, (snapshot) => {
+      const fetchedCats: string[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.name) {
+          fetchedCats.push(data.name);
+        }
+      });
+      setCategories(fetchedCats);
+    }, (err) => {
+      console.error("Error loading categories globally:", err);
+    });
+
+    return () => {
+      unsubscribeProd();
+      unsubscribeCat();
+    };
+  }, []);
 
   // Ref to prevent saving initial empty state over existing cloud cart on login
   const dataLoadedForUidRef = useRef<string | null>(null);
@@ -275,6 +323,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setPromoCode,
         promoApplied,
         setPromoApplied,
+        products,
+        categories,
+        productsLoading,
       }}
     >
       {children}

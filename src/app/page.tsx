@@ -12,6 +12,7 @@ import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy, doc } from "firebase/firestore";
 import { Product } from "@/data/products";
 import { Loader2 } from "lucide-react";
+import { useStore } from "@/context/StoreContext";
 
 const categoryImages: Record<string, string> = {
   "Tshirts": "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=300&h=300&fit=crop&q=80",
@@ -22,30 +23,13 @@ const categoryImages: Record<string, string> = {
 };
 
 export default function HomePage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products, productsLoading } = useStore();
   const [categories, setCategories] = useState<{ name: string; displayName: string; image: string }[]>([]);
   const [lookbook, setLookbook] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Subscribe to products
-    const qProd = query(collection(db, "products"), orderBy("createdAt", "desc"));
-    const unsubscribeProd = onSnapshot(qProd, (snapshot) => {
-      const fetched: Product[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.isActive !== false) {
-          fetched.push({ id: docSnap.id, ...data } as Product);
-        }
-      });
-      setProducts(fetched);
-      setLoading(false);
-    }, (err) => {
-      console.error("Error loading products:", err);
-      setLoading(false);
-    });
-
-    // 2. Subscribe to categories
+    // 1. Subscribe to categories
     const qCat = query(collection(db, "categories"), orderBy("name", "asc"));
     const unsubscribeCat = onSnapshot(qCat, (snapshot) => {
       const fetchedCats: any[] = [];
@@ -59,11 +43,13 @@ export default function HomePage() {
         });
       });
       setCategories(fetchedCats);
+      setCategoriesLoading(false);
     }, (err) => {
       console.error("Error loading categories:", err);
+      setCategoriesLoading(false);
     });
 
-    // 3. Subscribe to lookbook settings
+    // 2. Subscribe to lookbook settings
     const unsubscribeSettings = onSnapshot(doc(db, "siteSettings", "main"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -76,11 +62,12 @@ export default function HomePage() {
     });
 
     return () => {
-      unsubscribeProd();
       unsubscribeCat();
       unsubscribeSettings();
     };
   }, []);
+
+  const loading = productsLoading || categoriesLoading;
 
   // Filter new arrivals (items marked as isNewArrival)
   const newArrivals = products.filter((p) => p.isNewArrival).slice(0, 4);

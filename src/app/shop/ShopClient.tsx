@@ -7,12 +7,12 @@ import FilterBar from "@/components/FilterBar";
 import ProductGrid from "@/components/ProductGrid";
 import EmptyState from "@/components/EmptyState";
 import { Product } from "@/data/products";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
+import { useStore } from "@/context/StoreContext";
 
 export default function ShopClient() {
   const searchParams = useSearchParams();
+  const { products: allProducts, categories, productsLoading: loading } = useStore();
 
   // Search parameters parsing
   const initialSearch = searchParams.get("search") || "";
@@ -26,10 +26,7 @@ export default function ShopClient() {
   const [activeColor, setActiveColor] = useState("");
   const [maxPrice, setMaxPrice] = useState(10000);
   const [sortBy, setSortBy] = useState("newest");
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // Sync state with URL params on load
   useEffect(() => {
@@ -37,46 +34,6 @@ export default function ShopClient() {
     if (initialCategory) setActiveCategory(initialCategory);
     if (initialFilter === "new") setActiveCategory("New Arrivals");
   }, [initialSearch, initialCategory, initialFilter]);
-
-  // Real-time Firestore subscriptions
-  useEffect(() => {
-    // 1. Subscribe to products
-    const qProd = query(collection(db, "products"), orderBy("createdAt", "desc"));
-    const unsubscribeProd = onSnapshot(qProd, (snapshot) => {
-      const fetched: Product[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.isActive !== false) {
-          fetched.push({ id: docSnap.id, ...data } as Product);
-        }
-      });
-      setAllProducts(fetched);
-      setLoading(false);
-    }, (err) => {
-      console.error("Error loading products:", err);
-      setLoading(false);
-    });
-
-    // 2. Subscribe to categories
-    const qCat = query(collection(db, "categories"), orderBy("name", "asc"));
-    const unsubscribeCat = onSnapshot(qCat, (snapshot) => {
-      const fetchedCats: string[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.name) {
-          fetchedCats.push(data.name);
-        }
-      });
-      setCategories(fetchedCats);
-    }, (err) => {
-      console.error("Error loading categories:", err);
-    });
-
-    return () => {
-      unsubscribeProd();
-      unsubscribeCat();
-    };
-  }, []);
 
   // Handle actual filtering logic
   useEffect(() => {
