@@ -132,7 +132,7 @@ export default function CartDrawer() {
       const data = await response.json();
       
       if (data.paymentStatus === "SUCCESS") {
-        const pendingDocRef = doc(db, "users", currentUser.uid, "pendingOrder");
+        const pendingDocRef = doc(db, "pendingOrders", currentUser.uid);
         const pendingDoc = await getDoc(pendingDocRef);
         
         if (pendingDoc.exists()) {
@@ -280,7 +280,7 @@ export default function CartDrawer() {
         items: cart,
       };
       if (user) {
-        await setDoc(doc(db, "users", user.uid, "pendingOrder"), pendingOrder, { merge: true });
+        await setDoc(doc(db, "pendingOrders", user.uid), pendingOrder, { merge: true });
       }
 
       // Request Cashfree order session from our Next.js API route
