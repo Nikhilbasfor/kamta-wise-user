@@ -170,7 +170,19 @@ export default function CartDrawer() {
             alert("Payment verified, but local checkout session expired. Please contact support.");
           }
         } else {
-          alert("Order recovery: Payment was successful, but we could not find your pending order details in our database. Please contact Kamta Wise support with Cashfree Order ID: " + orderId + " to recover your order.");
+          // Check if webhook already processed the order and moved it to the main collection
+          const placedOrderRef = doc(db, "orders", orderId);
+          const placedOrderDoc = await getDoc(placedOrderRef);
+          if (placedOrderDoc.exists()) {
+            const placedOrder = placedOrderDoc.data();
+            setPlacedOrderInfo(placedOrder);
+            clearCart();
+            setPromoCode("");
+            setPromoApplied(false);
+            setCheckoutStep("success");
+          } else {
+            alert("Order recovery: Payment was successful, but we could not find your pending order details in our database. Please contact Kamta Wise support with Cashfree Order ID: " + orderId + " to recover your order.");
+          }
         }
       } else {
         alert("Payment was not successful (Status: " + (data.orderStatus || "FAILED") + "). Please try again.");

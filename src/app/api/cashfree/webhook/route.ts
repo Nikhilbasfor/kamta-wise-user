@@ -75,13 +75,57 @@ export async function POST(request: Request) {
         }
 
         console.log(`Successfully updated order ${orderId} status to confirmed via webhook`);
-      } else {
-        console.warn(`Order ${orderId} not found in top-level orders collection`);
+        } else {
+          console.log(`Order ${orderId} not found in top-level orders. Checking pendingOrders...`);
+          const pendingSnap = await adminDb.collection("pendingOrders")
+            .where("cashfreeOrderId", "==", orderId)
+            .limit(1)
+            .get();
+
+          if (!pendingSnap.empty) {
+            const pendingDoc = pendingSnap.docs[0];
+            const userId = pendingDoc.id;
+            const pendingOrder = pendingDoc.data();
+
+            const orderWithCreatedAt = {
+              ...pendingOrder,
+              status: "confirmed",
+              createdAt: pendingOrder.createdAt || new Date().toISOString(),
+              userName: pendingOrder.userName || "Customer",
+              userEmail: pendingOrder.userEmail || ""
+            };
+
+            // Save to top-level orders
+            await adminDb.collection("orders").doc(orderId).set({ ...orderWithCreatedAt, userId });
+
+            // Save to user's orders subcollection
+            await adminDb.collection("users").doc(userId).collection("orders").doc(orderId).set(orderWithCreatedAt);
+
+            // Update user's profile orders list
+            const userRef = adminDb.collection("users").doc(userId);
+            const userDoc = await userRef.get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              const ordersList = userData?.orders || [];
+              const exists = ordersList.some((o: any) => o.orderNumber === pendingOrder.orderNumber);
+              if (!exists) {
+                await userRef.update({
+                  orders: [orderWithCreatedAt, ...ordersList]
+                });
+              }
+            }
+
+            // Delete from pendingOrders
+            await pendingDoc.ref.delete();
+            console.log(`Successfully recovered and placed order ${orderId} from pendingOrders via webhook`);
+          } else {
+            console.warn(`Order ${orderId} not found in pendingOrders either.`);
+          }
+        }
+      } catch (dbErr: any) {
+        console.error("Database update error during webhook processing:", dbErr.message);
+        return NextResponse.json({ error: "Database update failed" }, { status: 500 });
       }
-    } catch (dbErr: any) {
-      console.error("Database update error during webhook processing:", dbErr.message);
-      return NextResponse.json({ error: "Database update failed" }, { status: 500 });
-    }
   }
 
   return NextResponse.json({ received: true }, { status: 200 });
