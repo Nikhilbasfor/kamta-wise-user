@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Cormorant_Garamond, Outfit } from "next/font/google";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
@@ -63,6 +64,24 @@ export default function RootLayout({
             <ProductQuickViewModal />
             <BottomNavigation />
             <AuthModal />
+            {process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID && (
+              <>
+                <Script
+                  src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}`}
+                  strategy="afterInteractive"
+                />
+                <Script id="google-analytics" strategy="afterInteractive">
+                  {`
+                    window.dataLayer = window.dataLayer || [];
+                    function gtag(){dataLayer.push(arguments);}
+                    gtag('js', new Date());
+                    gtag('config', '${process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}', {
+                      page_path: window.location.pathname,
+                    });
+                  `}
+                </Script>
+              </>
+            )}
           </StoreProvider>
         </AuthProvider>
       </body>
